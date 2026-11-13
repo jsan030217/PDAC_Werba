@@ -148,7 +148,7 @@ pdac_werba_2@assays$RNA <- RNA
 table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]])
 any(table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]]) > 1)
 #결과가 TRUE로 나와서 추가 코드 시행(make.unique())
-https://github.com/jsan030217/PDAC_Werba/issues/2#issue-6366662676
+<img width="507" height="768" alt="symbol_matching 실패 gene 모음" src="https://github.com/user-attachments/assets/30df77fd-b44c-4f05-936b-fb4d630d5bfb" />
 clean_symbols<-make.unique(HGNC.pdac_werba_2$Suggested.Symbol)
 RNA<-pdac_werba_2@assays$RNA
 RNA@counts@Dimnames[]<-clean_symbols
