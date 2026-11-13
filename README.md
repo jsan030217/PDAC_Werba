@@ -108,6 +108,58 @@ pdac_werba.sce <- scDblFinder(pdac_werba.sce, samples = "patient_ID")
 
 #3-5. singlet 과 doublet 확인
 table(pdac_werba.sce$scDblFinder.class)
+https://github.com/jsan030217/PDAC_Werba/issues/1#issue-6365997574
+
+#3-6. sce를 다시 seurat 형태로 변환
+#기존에는 data="logcounts" 였지만, 에러 발생(data에 logcounts값이 없어서)->data=NULL로 바꿔서 실행
+pdac_werba_seurat <- as.Seurat(pdac_werba.sce, counts = "counts",
+                               data = NULL,
+                               verbose = TRUE)
+
+#3-7. originalexp를 RNA로 되돌리는 과정-이는 Seurat::Assays(pdac_werba_seurat) 코드로 확인 결과 "RNA"로 나와서 생략함.
+pdac_werba_seurat <- RenameAssays(object = pdac_werba_seurat, originalexp = "RNA")
+
+#3-8. 실제 doublet 제거 과정(singlet으로 분류되는 것만 보존)
+pdac_werba_2 <- subset(pdac_werba_seurat, subset = scDblFinder.class == "singlet")
+
+#2번째 세이브포인트
+saveRDS(pdac_werba_2, file = "C:/Users/user/Desktop/jsdata/merged_singlet.rds")
+
+
+##4. HGNC symbol matching
+#4-1. 관련 패키지 loading
+library(HGNChelper)
+
+#4-2. sample의 gene에 대해서 같지만 구버전이거나 다른 이름으로 된 gene을 찾는다.
+#HGNChelper::checkGeneSymbols() 함수로 유전자 symbol 검증함수를 호출하고 입력된 유전자 목록을 공식 HGNC 데이터베이스와 대조한다.
+#이때 불러오는 pdac_werba_2@assays$RNA@counts@Dimnames[[1]] 는 gene name이다.(왜 rownames(pdac_werba_2) 를 사용하지 않으시는지)
+#옵션 중 unmapped.as.na=FALSE 는 매핑되지 않은 유전자를 NA(결측치)로 두지 않고 기존 유전자로 둔다는 의미이다.
+HGNC.pdac_werba_2 <- HGNChelper::checkGeneSymbols(pdac_werba_2@assays$RNA@counts@Dimnames[[1]], unmapped.as.na = FALSE, map = NULL)
+
+#4-3. HGNC symbol gene으로 교체
+# RNA assays 부분만 임시 변수로 복사해 오고, counts와 data 행렬의 행 이름을 최신 표준 심볼로 교체하고, 이 RNA부분을 기존의 pdac_werba_2 객체에 다시 덮어씌워 저장한다.
+RNA <- pdac_werba_2@assays$RNA
+RNA@counts@Dimnames[[1]]            <- HGNC.pdac_werba_2$Suggested.Symbol
+RNA@data@Dimnames[[1]]                <- HGNC.pdac_werba_2$Suggested.Symbol
+pdac_werba_2@assays$RNA <- RNA
+
+#4-4. 결과 확인
+#만약 HGNC symbol로 모든 유전자가 정확히 매칭되었다면 2번째 코드에서 2개 이상 등장하는 유전자는 없으므로 FALSE가 나와야 한다.
+table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]])
+any(table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]]) > 1)
+#결과가 TRUE로 나와서 추가 코드 시행
+https://github.com/jsan030217/PDAC_Werba/issues/2#issue-6366662676
+
+
+
+
+
+
+
+
+
+
+
 
 
 
