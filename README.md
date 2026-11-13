@@ -108,7 +108,7 @@ pdac_werba.sce <- scDblFinder(pdac_werba.sce, samples = "patient_ID")
 
 #3-5. singlet 과 doublet 확인
 table(pdac_werba.sce$scDblFinder.class)
-https://github.com/jsan030217/PDAC_Werba/issues/1#issue-6365997574
+<img width="959" height="1024" alt="1  remov doublet table" src="https://github.com/user-attachments/assets/22b81ddf-1d07-4945-b332-5e4ba8919a56" />
 
 #3-6. sce를 다시 seurat 형태로 변환
 #기존에는 data="logcounts" 였지만, 에러 발생(data에 logcounts값이 없어서)->data=NULL로 바꿔서 실행
@@ -163,16 +163,57 @@ pdac_werba_2@assays$RNA<-RNA
 #5-1. percent.mt 계산
 pdac_werba_2[["percent.mt"]] <- PercentageFeatureSet(pdac_werba_2, pattern = "^MT-")
 
+#5-2. 시각화
+VlnPlot(pdac_werba_2, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3)
+[vlnplot.pdf](https://github.com/user-attachments/files/34789401/vlnplot.pdf)
+plot1 <- FeatureScatter(pdac_werba_2, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(pdac_werba_2, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+[P1+P2.pdf](https://github.com/user-attachments/files/34789411/P1%2BP2.pdf)
 
- 
+#5-3. plot을 토대로 filtering 실시
+pdac_werba_2 <- subset(pdac_werba_2, subset = nFeature_RNA > 200 & nFeature_RNA < 9000 & percent.mt < 25)
+
+#5-4. filtering 후 plot
+[vlnplot(filtering 후).pdf](https://github.com/user-attachments/files/34789442/vlnplot.filtering.pdf)
+[P3+P4(filtering 후).pdf](https://github.com/user-attachments/files/34789448/P3%2BP4.filtering.pdf)
 
 
+##6. processing(normalization, HVG selection, scaling, runPCA)
+#normalization: sequencing depth 차이 보정하기 위해서. 세포마다 전체 RNA 함량이 다를 수 있기 때문에 
+pdac_werba_2 <- NormalizeData(pdac_werba_2, normalization.method = "LogNormalize", scale.factor = 10000)
+#Highly variable genes(HVG) selection: 설정한 nFeatures 수만큼 세포 간 차이가 뚜렷한 고변이 유전자를 선별한다.
+pdac_werba_2 <- FindVariableFeatures(pdac_werba_2, selection.method = "vst", nfeatures = 3000)
+#all.genes<-rownames(pdac_werba_2) 를 사용하여 추후 DoHeatmap() 함수로 마커 유전자들의 발현 패턴을 그릴 때, HVG 목록에 없던 유전자도 스케일링된 값으로 깔끔하게 시각화 가능
+all.genes <- rownames(pdac_werba_2)
+#scaling: 모든 유전자에 대해서 평균을 0으로, 분산을 1로 맞춘다. 이를 통해 발현량이 원래 높은 유전자가 PCA나 heatmap에서 결과를 독점하는 현상을 방지하고, 모든 유전자가 동등한 가중치를 갖도록 만든다.
+pdac_werba_2 <- ScaleData(pdac_werba_2, features = all.genes)
+#PCA: 고변이유전자 3000개에 대해서만 PCA를 수행한다. PCA의 결과 3000개의 유전자로 그린 3000차원의 고차원에서, 데이터의 분포에 따라 분산이 가장 큰 방향의 PC1을 잡고, 그와 직교하는 PC2 를 만들며 새로운 축을 만든다. 이렇게 PCA를 수행하여 나온 PC를 몇 개 사용할지 결정하여 umap을 그리며, 그때는 elbowplot을 이용하여 PC의 parameter을 결정할 수 있다. 이렇게 고차원에서 저차원으로 차원 축소를 하여 실제 분석에 용이하게 사용한다. 
+pdac_werba_2 <- RunPCA(pdac_werba_2, features = VariableFeatures(object = pdac_werba_2))
+<img width="484" height="671" alt="3  RunPCA 결과_PC의 positive negative_1" src="https://github.com/user-attachments/assets/0cbccad5-a772-4b6d-b1df-9b7ddaf4ae4b" />
+<img width="487" height="424" alt="3  RunPCA 결과_PC의 positive negative_2" src="https://github.com/user-attachments/assets/de185c98-e82a-4891-8f5b-a0a07e5c672f" />
 
 
+##7. Harmony & clustering 
+#Harmony: 여러 환자 데이터들을 merge로 단순 병합하였기 때문에 아직 환자마다 개인차로 인한 batch effect를 제거한다.
+#UMAP: 보정된 harmony공간의 상위 30개 차원을 사용해 세포들을 2차원 평면에 시각화할 좌표를 계산한다. (reduction='harmony' 로 지정하지 않으면 기본값인 pca가 나온다.)
+#FindNeighbors: 보정된 30개 차원 공간에서 각 세포와 유전자 발현 패턴이 가장 비슷한 이웃 세포들을 찾아 KNN그래프로 연결
+#FindClusters: 연결망을 바탕으로 세포들을 clustering(resolution의 수치가 낮을수록 큰 덩어리 위주로 굵직하게 나뉜다. 0.1 의 파라미터로 설정해 major cell types를 확인할 때 사용한다.)
+library(harmony)
+pdac_werba_2 <- RunHarmony(pdac_werba_2, group.by.vars = "patient_ID")
+pdac_werba_2 <- RunUMAP(pdac_werba_2, reduction = "harmony", dims = 1:30)
+pdac_werba_2 <- FindNeighbors(pdac_werba_2, reduction = "harmony", dims = 1:30)
+pdac_werba_2 <- FindClusters(pdac_werba_2, resolution = 0.1)
 
+#3번째 세이브 포인트
+saveRDS(pdac_werba_2, file = "C:/Users/user/Desktop/jsdata/merged_werba_processed.rds")
 
+#데이터 불러오기
+setwd("C:/Users/user/Desktop/jsdata/result&plot/Werba_PDAC")
+werba <- readRDS("merged_werba_processed.rds")
+werba <- FindClusters(werba, resolution = 0.1)
 
-
+#8. visualization
 
 
 
