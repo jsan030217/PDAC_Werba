@@ -137,7 +137,7 @@ library(HGNChelper)
 HGNC.pdac_werba_2 <- HGNChelper::checkGeneSymbols(pdac_werba_2@assays$RNA@counts@Dimnames[[1]], unmapped.as.na = FALSE, map = NULL)
 
 #4-3. HGNC symbol gene으로 교체
-# RNA assays 부분만 임시 변수로 복사해 오고, counts와 data 행렬의 행 이름을 최신 표준 심볼로 교체하고, 이 RNA부분을 기존의 pdac_werba_2 객체에 다시 덮어씌워 저장한다.
+#RNA assays 부분만 임시 변수로 복사해 오고, counts와 data 행렬의 행 이름을 최신 표준 심볼로 교체하고, 이 RNA부분을 기존의 pdac_werba_2 객체에 다시 덮어씌워 저장한다.
 RNA <- pdac_werba_2@assays$RNA
 RNA@counts@Dimnames[[1]]            <- HGNC.pdac_werba_2$Suggested.Symbol
 RNA@data@Dimnames[[1]]                <- HGNC.pdac_werba_2$Suggested.Symbol
@@ -147,8 +147,32 @@ pdac_werba_2@assays$RNA <- RNA
 #만약 HGNC symbol로 모든 유전자가 정확히 매칭되었다면 2번째 코드에서 2개 이상 등장하는 유전자는 없으므로 FALSE가 나와야 한다.
 table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]])
 any(table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]]) > 1)
-#결과가 TRUE로 나와서 추가 코드 시행
+#결과가 TRUE로 나와서 추가 코드 시행(make.unique())
 https://github.com/jsan030217/PDAC_Werba/issues/2#issue-6366662676
+clean_symbols<-make.unique(HGNC.pdac_werba_2$Suggested.Symbol)
+RNA<-pdac_werba_2@assays$RNA
+RNA@counts@Dimnames[]<-clean_symbols
+RNA@data@Dimnames[]<-clean_symbols
+rownames(RNA@meta.features)<-clean_symbols
+pdac_werba_2@assays$RNA<-RNA
+#이후 FALSE로 나와서 다음 단계 진행
+
+
+##5. Filtering
+#nFeature, nCount, percent.mt를 보면서 QC
+#5-1. percent.mt 계산
+pdac_werba_2[["percent.mt"]] <- PercentageFeatureSet(pdac_werba_2, pattern = "^MT-")
+
+
+
+
+
+
+
+
+
+
+
 
 
 
