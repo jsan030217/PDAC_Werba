@@ -204,6 +204,7 @@ pdac_werba_2 <- RunHarmony(pdac_werba_2, group.by.vars = "patient_ID")
 pdac_werba_2 <- RunUMAP(pdac_werba_2, reduction = "harmony", dims = 1:30)
 pdac_werba_2 <- FindNeighbors(pdac_werba_2, reduction = "harmony", dims = 1:30)
 pdac_werba_2 <- FindClusters(pdac_werba_2, resolution = 0.1)
+#이 과정까지 하면 pdac_werba_2 객체 안에는 환자 간 배치 보정, 2차원 UMAP 좌표 계산, 클러스터링 결과까지 모두 저장된 상태이다.
 
 #3번째 세이브 포인트
 saveRDS(pdac_werba_2, file = "C:/Users/user/Desktop/jsdata/merged_werba_processed.rds")
@@ -212,6 +213,7 @@ saveRDS(pdac_werba_2, file = "C:/Users/user/Desktop/jsdata/merged_werba_processe
 setwd("C:/Users/user/Desktop/jsdata/result&plot/Werba_PDAC")
 werba <- readRDS("merged_werba_processed.rds")
 werba <- FindClusters(werba, resolution = 0.1)
+
 
 #8. visualization
 
