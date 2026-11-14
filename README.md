@@ -96,7 +96,7 @@ library(SingleCellExperiment)
 library(scDblFinder)
 library(BiocParallel)
 
-#3-2. merge로 인한 샘플별 레이어 분리 문제 발생->JoinLayers() 로해 
+__#3-2. merge로 인한 샘플별 레이어 분리 문제 발생->JoinLayers() 로 해결__
 pdac_werba<-JoinLayers(pdac_werba)
 
 #3-3. seurat을 sce 형태로 변환
@@ -108,15 +108,16 @@ pdac_werba.sce <- scDblFinder(pdac_werba.sce, samples = "patient_ID")
 
 #3-5. singlet 과 doublet 확인
 table(pdac_werba.sce$scDblFinder.class)
+
 <img width="959" height="1024" alt="1  remov doublet table" src="https://github.com/user-attachments/assets/22b81ddf-1d07-4945-b332-5e4ba8919a56" />
 
 #3-6. sce를 다시 seurat 형태로 변환
-#기존에는 data="logcounts" 였지만, 에러 발생(data에 logcounts값이 없어서)->data=NULL로 바꿔서 실행
+__#기존에는 data="logcounts" 였지만, 에러 발생(data에 logcounts값이 없어서)->data=NULL로 바꿔서 실행__
 pdac_werba_seurat <- as.Seurat(pdac_werba.sce, counts = "counts",
                                data = NULL,
                                verbose = TRUE)
 
-#3-7. originalexp를 RNA로 되돌리는 과정-이는 Seurat::Assays(pdac_werba_seurat) 코드로 확인 결과 "RNA"로 나와서 생략함.
+__#3-7. originalexp를 RNA로 되돌리는 과정-이는 Seurat::Assays(pdac_werba_seurat) 코드로 확인 결과 "RNA"로 나와서 생략함.__
 pdac_werba_seurat <- RenameAssays(object = pdac_werba_seurat, originalexp = "RNA")
 
 #3-8. 실제 doublet 제거 과정(singlet으로 분류되는 것만 보존)
@@ -132,7 +133,7 @@ library(HGNChelper)
 
 #4-2. sample의 gene에 대해서 같지만 구버전이거나 다른 이름으로 된 gene을 찾는다.
 #HGNChelper::checkGeneSymbols() 함수로 유전자 symbol 검증함수를 호출하고 입력된 유전자 목록을 공식 HGNC 데이터베이스와 대조한다.
-#이때 불러오는 pdac_werba_2@assays$RNA@counts@Dimnames[[1]] 는 gene name이다.(왜 rownames(pdac_werba_2) 를 사용하지 않으시는지)
+__#이때 불러오는 pdac_werba_2@assays$RNA@counts@Dimnames[[1]] 는 gene name이다.(왜 rownames(pdac_werba_2) 를 사용하지 않으시는지)__
 #옵션 중 unmapped.as.na=FALSE 는 매핑되지 않은 유전자를 NA(결측치)로 두지 않고 기존 유전자로 둔다는 의미이다.
 HGNC.pdac_werba_2 <- HGNChelper::checkGeneSymbols(pdac_werba_2@assays$RNA@counts@Dimnames[[1]], unmapped.as.na = FALSE, map = NULL)
 
@@ -144,11 +145,13 @@ RNA@data@Dimnames[[1]]                <- HGNC.pdac_werba_2$Suggested.Symbol
 pdac_werba_2@assays$RNA <- RNA
 
 #4-4. 결과 확인
-#만약 HGNC symbol로 모든 유전자가 정확히 매칭되었다면 2번째 코드에서 2개 이상 등장하는 유전자는 없으므로 FALSE가 나와야 한다.
+__#만약 HGNC symbol로 모든 유전자가 정확히 매칭되었다면 2번째 코드에서 2개 이상 등장하는 유전자는 없으므로 FALSE가 나와야 한다.__
 table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]])
 any(table(pdac_werba_2@assays$RNA@counts@Dimnames[[1]]) > 1)
 #결과가 TRUE로 나와서 추가 코드 시행(make.unique())
+
 <img width="507" height="768" alt="symbol_matching 실패 gene 모음" src="https://github.com/user-attachments/assets/30df77fd-b44c-4f05-936b-fb4d630d5bfb" />
+
 clean_symbols<-make.unique(HGNC.pdac_werba_2$Suggested.Symbol)
 RNA<-pdac_werba_2@assays$RNA
 RNA@counts@Dimnames[]<-clean_symbols
@@ -216,6 +219,74 @@ werba <- FindClusters(werba, resolution = 0.1)
 
 
 #8. visualization
+#연노랑~진한빨강으로 이어지는 9단계 색상 팔레트(YlOrRd)를 생성해 pal변수에 저장하여, 특정 마커 유전자의 발현량을 UMAP위에 덧그리는 featurePlot을 그리기 위해 사용
+pal <- brewer.pal(9, "YlOrRd")
+#EPCAM, PTPRC gene을 feature로 featureplot을 그려 각 gene의 발현 위치를 UMAP상에서 나란히 시각화
+__#이때 유전자 선정 기준은 무엇인지__
+#EPCAM: 상피/종양 세포 마커
+#PTPRC: 전체 면역세포 마커
+FeaturePlot_scCustom(seurat_object = werba,
+                     features = c("EPCAM", "PTPRC"),
+                     na_cutoff = 0.001,
+                     na_color = "lightgrey",
+                     colors_use = pal,
+                     num_columns = 2,
+                     pt.size = 0.01,
+                     raster=FALSE)
+
+<img width="429" height="541" alt="4  featurePlot(EPCAM, PTPRC)" src="https://github.com/user-attachments/assets/a867c2f6-9a3b-4924-a6bf-1d087ec88c7c" />
+
+#COL1A1, VWF gene을 feature로 featureplot을 그려 각 gene의 발현 위치를 UMAP상에서 나란히 시각화
+#COL1A1: 섬유아세포(CAF포함) 마커*제 1형 콜라겐을 생성하는 CAF 및 Stellate cells의 가장 대표적인 마커로, PDAC은 섬유화가 매우 심한 종양이므로, 이 마커가 강하게 발현되는 뚜렷한 클러스터가 발견될 것으로 예상된다.
+#VWF: 혈관내피세포 마커
+FeaturePlot_scCustom(seurat_object = werba,
+                     features = c("COL1A1", "VWF"),
+                     na_cutoff = 0.001,
+                     na_color = "lightgrey",
+                     colors_use = pal,
+                     num_columns = 2,
+                     pt.size = 0.01,
+                     raster=FALSE)
+
+<img width="429" height="541" alt="4  featurePlot(COL1A1, VWF)" src="https://github.com/user-attachments/assets/acb25656-a149-4953-a22d-c4d83157596b" />
+
+#featureplot과 dotplot or dimplot을 이용해 marker gene별 클러스터 번호 확인
+DotPlot(werba, features = c("EPCAM", "PTPRC", "COL1A1", "VWF")) + RotatedAxis()
+
+[5. dotplot.pdf](https://github.com/user-attachments/files/34843264/5.dotplot.pdf)
+
+VlnPlot(werba, features = c("EPCAM", "PTPRC", "COL1A1", "VWF"), pt.size = 0, ncol = 2)
+
+[5. vlnplot(4개gene).pdf](https://github.com/user-attachments/files/34843232/5.vlnplot.4.gene.pdf)
+
+#위 그래프들을 근거로 클러스터 번호를 대분류 세포 이름으로 매칭
+__#11번 클러스터가 immune으로 분류되는 이유??__
+Idents(werba, cells = WhichCells(werba, idents = c(0, 8, 12))) <- "Epithelial"
+Idents(werba, cells = WhichCells(werba, idents = c(1, 2, 5, 6, 9, 10, 11))) <- "Immune"
+Idents(werba, cells = WhichCells(werba, idents = c(3))) <- "Mesenchymal"
+Idents(werba, cells = WhichCells(werba, idents = c(7))) <- "Endothelial"
+werba@meta.data$compartment <- Idents(werba)
+
+#werba 객체의 기본 기준이 클러스터 번호가 아닌 환자 번호로 설정되어 있어, 환자별 세포 분포를 보여주는 UMAP
+DimPlot(werba, label = TRUE)
+
+[6. dimplot(werba).pdf](https://github.com/user-attachments/files/34843426/6.dimplot.werba.pdf)
+
+#이 dimplot을 통해서 클러스터링 결과가 아닌, 앞서 실행한 RunHarmony()가 성공적으로 작동했는지를 검증 가능. P4~p26까지 11명의 환자 세포들이 한곳에 따로 뭉치지 않고 모든 세포 구역에 여러 색깔이 고르게 섞여 있는 것으로 보아 batch effect가 잘 보정되었음으로 보인다.
+
+#위의 클러스터에서 아직 분류되지 않은 4번 클러스터에 대한 sub-clustering 진행(4번 클러스터는 dotplot 상에서 EPCAM과 PTPRC가 동시에 발현되는 애매한 집단이였기 때문에)
+cluster4 <- subset(werba, idents = "4")
+cluster4 <- FindNeighbors(cluster4, reduction = "harmony", dims = 1:30)
+cluster4 <- FindClusters(cluster4, resolution = 0.2)
+DimPlot(cluster4, label = TRUE)
+
+#증식 마커인 MKI67 과 PCLAF 를 함께 넣어, 더블릿이 아닌 세포 분열이 활발하게 일어나는 증식 중인 세포들이 유전자 발현 패턴이 비슷해서 하나로 묶여 있던 집단이라는 것을 확인하였다.
+DotPlot(cluster4, features = c("EPCAM", "PTPRC", "COL1A1", "VWF", "MKI67", "PCLAF"),
+        cols = "RdYlBu")
+
+[7. dotplot(cluster4).pdf](https://github.com/user-attachments/files/34843888/7.dotplot.cluster4.pdf)
+
+
 
 
 
