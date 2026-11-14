@@ -218,7 +218,7 @@ werba <- readRDS("merged_werba_processed.rds")
 werba <- FindClusters(werba, resolution = 0.1)
 
 
-#8. visualization
+##8. visualization
 #연노랑~진한빨강으로 이어지는 9단계 색상 팔레트(YlOrRd)를 생성해 pal변수에 저장하여, 특정 마커 유전자의 발현량을 UMAP위에 덧그리는 featurePlot을 그리기 위해 사용
 pal <- brewer.pal(9, "YlOrRd")
 #EPCAM, PTPRC gene을 feature로 featureplot을 그려 각 gene의 발현 위치를 UMAP상에서 나란히 시각화
@@ -286,18 +286,76 @@ DotPlot(cluster4, features = c("EPCAM", "PTPRC", "COL1A1", "VWF", "MKI67", "PCLA
 
 [7. dotplot(cluster4).pdf](https://github.com/user-attachments/files/34843888/7.dotplot.cluster4.pdf)
 
+#해당 dotplot으로 보았을 때 0번 subcluster을 제외한 1~6번 subclusters는 세포증식 유전자가 과별현 중인 분열 중인 세포들로 판단하였다. 세포 주기 유전자가 이후 정밀 클러스터링이나 유전자 발현 비교를 왜곡하는 것을 막기 위해 0번만 살리고 나머지 증식 클러스터링은 제거한다.
+
+#4번 클러스터의 0번 서브클러스터만 werba2에 넣고 나머지는 제
+cluster4_0 <- subset(cluster4, idents = "0")
+DimPlot(cluster4_0)
+Idents(cluster4_0, cells = WhichCells(cluster4_0, idents = c(0))) <- "Epithelial"
+cluster4_0@meta.data$compartment <- Idents(cluster4_0)
+
+[7. dimplot(cluster4).pdf](https://github.com/user-attachments/files/34844260/7.dimplot.cluster4.pdf)
+
+sub <- subset(werba, idents = c("Epithelial", "Immune", "Mesenchymal", "Endothelial"))
+
+werba2 <- merge(sub, y= cluster4_0)
 
 
+##9. re-processing
+#위에서 werba2에 대해서 4번의 1~6 서브클러스터와 13번 클러스터를 제외시킨 후 남은 세포들로 다시 클러스터링
+__#13번 클러스터는 그냥 더블렛이라고 판단??__
+werba2 <- NormalizeData(werba2, normalization.method = "LogNormalize", scale.factor = 10000)
+werba2 <- FindVariableFeatures(werba2, selection.method = "vst", nfeatures = 3000)
+all.genes <- rownames(werba2)
+werba2 <- ScaleData(werba2, features = all.genes)
+werba2 <- RunPCA(werba2, features = VariableFeatures(object = werba2))
+werba2  <- RunHarmony(werba2, group.by.vars = "patient_ID")
+werba2 <- RunUMAP(werba2, reduction = "harmony", dims = 1:30)
+werba2 <- FindNeighbors(werba2, reduction = "harmony", dims = 1:30)
+werba2 <- FindClusters(werba2, resolution = 0.1)
 
+my_levels <- c("Epithelial", "Immune", "Mesenchymal", "Endothelial")
+werba2@meta.data$compartment <- factor(x = werba2@meta.data$compartment, levels = my_levels)
 
+DimPlot(werba2, label = TRUE)
 
+[9. DimPlot(werba2).pdf](https://github.com/user-attachments/files/34844424/9.DimPlot.werba2.pdf)
 
+DimPlot_scCustom(seurat_object = werba2, label = FALSE, pt.size = 0.1,
+                 raster=FALSE, group.by = "compartment",
+                 label.box = TRUE)
 
+[10. DimPlot(compartment).pdf](https://github.com/user-attachments/files/34844426/10.DimPlot.compartment.pdf)
 
+#해당 DimPlot에서는 우리가 이전에 설정한 Epithelial, immune, Mesenchymeal, Endothelial 을 compartment로 하여 4가지 세포군이 서로 섞이지 않고 클러스터를 형성하고 있는 UMAP을 볼 수 있다.
 
+#최종 마커 검증
+FeaturePlot_scCustom(seurat_object = werba2,
+                     features = c("EPCAM", "PTPRC"),
+                     na_cutoff = 0.001,
+                     na_color = "lightgrey",
+                     colors_use = pal,
+                     num_columns = 2,
+                     pt.size = 0.01,
+                     raster=FALSE)
 
+![11  featurePlot(EPCAM, PTPRC)](https://github.com/user-attachments/assets/9033a03a-1b3e-4cf9-8f40-a08a54c30a3a)
 
+FeaturePlot_scCustom(seurat_object = werba2,
+                     features = c("COL1A1", "VWF"),
+                     na_cutoff = 0.001,
+                     na_color = "lightgrey",
+                     colors_use = pal,
+                     num_columns = 2,
+                     pt.size = 0.01,
+                     raster=FALSE)
 
+![11  featurePlot(COL1A1, VWF)](https://github.com/user-attachments/assets/972af6ee-14f4-4a81-8557-c6e0f3ff7365)
 
+saveRDS(werba2, file = "merged_werba_processed_final.rds")
 
-
+#Epithelial만 단독으로 분리하여 별도의 .rds파일 저장
+Idents(werba2) <- "compartment"
+werba_epi <- subset(werba2, idents = "Epithelial")
+saveRDS(werba_epi, file = "werba_epithelial.rds")
+#이후 후속 분석에 사용
